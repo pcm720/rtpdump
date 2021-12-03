@@ -1,6 +1,8 @@
 # rtpdump
 
-Extract media files from RTP streams in pcap format
+Thanks to github.com/hdiniz/rtpdump.
+
+rtpdump extracts media files from RTP streams in pcap format.
 
 ## codec support
 
@@ -13,6 +15,7 @@ Therefore, some codecs might be limited to usual scenarios on these networks.
 + H264 - [RFC 6184](https://tools.ietf.org/html/rfc6184)  
 Supports Single NAL Mode and some Non-Interleaved Mode streams, due to current lack of STAP-A support  
 
+
 | Payload Type  	| Support      	|
 |---------------	|--------------	|
 | 1-23 NAL Unit 	| Yes          	|
@@ -24,7 +27,12 @@ Supports Single NAL Mode and some Non-Interleaved Mode streams, due to current l
 | 29 FU-B       	| No           	|
 
 + EVS - [3GPP TS 26.445](http://www.3gpp.org/DynaReport/26445.htm)  
-  *Not yet supported.*
+  Supports EVS Primary Compact Frame.  
+  Supports EVS Primary Header-Full format, with one ToC + single frame.  
+  Supports EVS Primary 56 bits (Special case).  
+  Supports EVS IO SID (Special case).  
+  *Not supported EVS Header-Full format with multiple ToC and frames*.  
+  *Not supported EVS IO, implementation under progress, contributions welcome!*.  
 + H263 - [RFC 2190](https://tools.ietf.org/html/rfc2190)  
   *Not yet supported.*
 
