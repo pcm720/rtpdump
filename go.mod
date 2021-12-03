@@ -1,4 +1,4 @@
-module rtpduump
+module rtpdump
 
 go 1.15
 
