@@ -7,11 +7,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/hdiniz/rtpdump/codecs"
-	"github.com/hdiniz/rtpdump/console"
-	"github.com/hdiniz/rtpdump/esp"
-	"github.com/hdiniz/rtpdump/log"
-	"github.com/hdiniz/rtpdump/rtp"
+	"github.com/david-biro/rtpdump/codecs"
+	"github.com/david-biro/rtpdump/console"
+	"github.com/david-biro/rtpdump/esp"
+	"github.com/david-biro/rtpdump/log"
+	"github.com/david-biro/rtpdump/rtp"
 	"github.com/urfave/cli"
 )
 
@@ -182,6 +182,7 @@ var dumpCmd = func(c *cli.Context) error {
 	return doInteractiveDump(c, rtpReader)
 }
 
+//var rtpnum = 0
 func doInteractiveDump(c *cli.Context, rtpReader *rtp.RtpReader) error {
 	rtpStreams := rtpReader.GetStreams()
 
@@ -250,6 +251,7 @@ func doInteractiveDump(c *cli.Context, rtpReader *rtp.RtpReader) error {
 
 	codec := codecMetadata.Init()
 	err = codec.SetOptions(optionsMap)
+	//fmt.Println(optionsMap)
 
 	if err != nil {
 		return err
@@ -264,6 +266,8 @@ func doInteractiveDump(c *cli.Context, rtpReader *rtp.RtpReader) error {
 		frames, err := codec.HandleRtpPacket(r)
 		if err == nil {
 			f.Write(frames)
+			// rtpnum = rtpnum + 1
+			// fmt.Println(rtpnum)
 		}
 	}
 	f.Sync()

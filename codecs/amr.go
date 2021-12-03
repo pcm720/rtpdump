@@ -3,8 +3,8 @@ package codecs
 import (
 	"errors"
 
-	"github.com/hdiniz/rtpdump/log"
-	"github.com/hdiniz/rtpdump/rtp"
+	"github.com/david-biro/rtpdump/log"
+	"github.com/david-biro/rtpdump/rtp"
 )
 
 const AMR_NB_MAGIC string = "#!AMR\n"
