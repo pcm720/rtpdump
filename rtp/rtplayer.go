@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/david-biro/rtpdump/util"
 	"github.com/google/gopacket"
-	"github.com/hdiniz/rtpdump/util"
 )
 
-var RtpCapureFilter string = "udp and not (" +
+var RtpCapureFilter string = "udp or vlan and not (" +
 	"udp port 53 or " + // DNS
 	"udp port 138 or " + // NETBIOS
 	"udp port 67 or " + // BOOTSTRAP
