@@ -1,8 +1,8 @@
 # rtpdump
 
-Thanks to github.com/hdiniz/rtpdump.
+Thanks to [github.com/hdiniz/rtpdump](http://github.com/hdiniz/rtpdump)! Added EVS extracting capability and now supports 802.1q.
 
-rtpdump extracts media files from RTP streams in pcap format.
+The rtpdump extracts media files from RTP streams in pcap format.
 
 ## codec support
 
@@ -30,11 +30,24 @@ Supports Single NAL Mode and some Non-Interleaved Mode streams, due to current l
   Supports EVS Primary Compact Frame.  
   Supports EVS Primary Header-Full format, with one ToC + single frame.  
   Supports EVS Primary 56 bits (Special case).  
-  Supports EVS IO SID (Special case).  
-  *Not supported EVS Header-Full format with multiple ToC and frames*.  
-  *Not supported EVS IO, implementation under progress, contributions welcome!*.  
+  Supports EVS AMR-WB IO SID (Special case).  
+  *Not supported EVS Header-Full format with multiple ToC and multiple frames*.  
+  *Not supported EVS IO, implementation is in progress, contributions welcome!*.  
 + H263 - [RFC 2190](https://tools.ietf.org/html/rfc2190)  
   *Not yet supported.*
+
+
+## convert EVS to audio file
+
+Use the decoder provided by 3GPP TS 26.442 or 3GPP TS 26.443 to convert evs-mime storage format to binary 
+synthesized audio file in the following way: 
+
+On Windows:
+EVS_dec.exe -mime 48 input.evs-mime out_PCM.raw
+
+The source code can be compiled for Linux also. The raw file can be imported to e.g Audacity for listening.
+
+
 
 ## ipsec support
 
@@ -87,11 +100,8 @@ For Windows, make sure mingw(32/64) toolchain is on PATH for gopacket WinPcap de
 
 ## planned features
 
-1. Better automation and scription support
-2. Include stream analisys, packets lost, jitter, etc
-3. Media player directly from pcap. ffmpeg support.
-4. Jitter buffer to simulate original condition, i.e. packet loss due to jitter
-5. Support multiple speach frames in audio packet
+1. EVS Header-Full format with multiple ToC and multiple frames (TS 26.445 Chapter A.2.2 )
+
 
 ## contributions
 
