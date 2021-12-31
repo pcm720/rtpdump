@@ -95,15 +95,13 @@ var dumpCmd = func(c *cli.Context) error {
 		return cli.NewExitError("stream with specified index doesn't exist", 1)
 	}
 
-	dumpOptions := dumpOptions{
+	return doDump(dumpOptions{
 		codecMetadata: codecMetadata,
 		rtpStreams:    rtpStreams,
 		streamIndex:   streamIndex,
 		options:       optionsMap,
 		outputFile:    c.String("output"),
-	}
-
-	return doDump(dumpOptions)
+	})
 }
 
 func doDump(options dumpOptions) error {
@@ -144,6 +142,7 @@ func doDump(options dumpOptions) error {
 			os.Remove(options.outputFile)
 			return cli.NewExitError(fmt.Sprintf("failed to decode stream: %s", err), 1)
 		}
+		return nil
 	}
 
 	extension := filepath.Ext(options.outputFile) // dump all streams
