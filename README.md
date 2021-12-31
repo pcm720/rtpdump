@@ -87,6 +87,8 @@ a=rtpmap:99 AMR/8000
 
 + rtpdump streams [pcap]  
   displays RTP streams
++ rtpdump interactive-dump [pcap]
+  dumps a media stream interactively.
 + rtpdump dump [pcap]
   dumps a media stream.
 + rtpdump play (--host localhost --port port) [pcap]

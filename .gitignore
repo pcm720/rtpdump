@@ -1,3 +1,9 @@
+# macOS files
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
 # Compiled Object files, Static and Dynamic libs (Shared Objects)
 *.o
 *.a
