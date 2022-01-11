@@ -105,40 +105,14 @@ var dumpCmd = func(c *cli.Context) error {
 }
 
 func doDump(options dumpOptions) error {
-	codec := options.codecMetadata.Init()
-
-	err := codec.SetOptions(options.options)
-	if err != nil {
-		return err
-	}
-
-	codec.Init()
-
-	dumpStream := func(fileName string, stream *rtp.RtpStream) (err error) {
-		defer func() {
-			if p := recover(); p != nil {
-				err = fmt.Errorf("%s", p)
-			}
-		}()
-
-		f, err := os.OpenFile(fileName, os.O_RDWR|os.O_CREATE, 0655)
-		if err != nil {
-			return cli.NewMultiError(cli.NewExitError("failed to create file", 1), err)
-		}
-		defer f.Close()
-
-		f.Write(codec.GetFormatMagic())
-		for _, r := range stream.RtpPackets {
-			if frames, err := codec.HandleRtpPacket(r); err == nil {
-				f.Write(frames)
-			}
-		}
-		f.Sync()
-		return nil
-	}
-
 	if options.streamIndex != -1 { // dump single stream
-		if err = dumpStream(options.outputFile, options.rtpStreams[options.streamIndex-1]); err != nil {
+		codec := options.codecMetadata.Init()
+		if err := codec.SetOptions(options.options); err != nil {
+			return err
+		}
+		codec.Init()
+
+		if err := dumpStream(codec, options.outputFile, options.rtpStreams[options.streamIndex-1]); err != nil {
 			os.Remove(options.outputFile)
 			return cli.NewExitError(fmt.Sprintf("failed to decode stream: %s", err), 1)
 		}
@@ -147,14 +121,44 @@ func doDump(options dumpOptions) error {
 
 	extension := filepath.Ext(options.outputFile) // dump all streams
 	baseName := options.outputFile[:len(options.outputFile)-len(extension)] + "_s"
+	fmt.Printf("dumping %d streams\n", len(options.rtpStreams))
 	for streamIndex, stream := range options.rtpStreams {
+		codec := options.codecMetadata.Init()
+		if err := codec.SetOptions(options.options); err != nil {
+			return err
+		}
+		codec.Init()
+
 		fileName := baseName + strconv.Itoa(streamIndex+1) + extension
-		err := dumpStream(fileName, stream)
-		if err != nil {
+
+		if err := dumpStream(codec, fileName, stream); err != nil {
 			log.Error("failed to decode stream " + strconv.Itoa(streamIndex+1) + ": " + err.Error())
 			os.Remove(fileName)
 		}
 	}
 	return nil
 
+}
+
+func dumpStream(codec codecs.Codec, fileName string, stream *rtp.RtpStream) (err error) {
+	defer func() {
+		if p := recover(); p != nil {
+			err = fmt.Errorf("%s", p)
+		}
+	}()
+
+	f, err := os.OpenFile(fileName, os.O_RDWR|os.O_CREATE, 0655)
+	if err != nil {
+		return cli.NewMultiError(cli.NewExitError("failed to create file", 1), err)
+	}
+	defer f.Close()
+
+	f.Write(codec.GetFormatMagic())
+	for _, r := range stream.RtpPackets {
+		if frames, err := codec.HandleRtpPacket(r); err == nil {
+			f.Write(frames)
+		}
+	}
+	f.Sync()
+	return nil
 }
