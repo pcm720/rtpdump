@@ -131,9 +131,10 @@ var streamsCmd = func(c *cli.Context) error {
 		return nil
 	}
 
-	for _, v := range rtpStreams {
-		fmt.Printf("%s\n", v)
+	for i, v := range rtpStreams {
+		fmt.Printf("%d: %s\n", i+1, v)
 	}
+	fmt.Printf("total: %d streams\n", len(rtpStreams))
 
 	return nil
 }
