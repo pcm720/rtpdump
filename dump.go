@@ -105,15 +105,14 @@ var dumpCmd = func(c *cli.Context) error {
 }
 
 func doDump(options dumpOptions) error {
-	if options.streamIndex != -1 { // dump single stream
-		codec := options.codecMetadata.Init()
-		if err := codec.SetOptions(options.options); err != nil {
-			return err
-		}
-		codec.Init()
+	codec := options.codecMetadata.Init()
+	if err := codec.SetOptions(options.options); err != nil {
+		return err
+	}
+	codec.Init()
 
+	if options.streamIndex != -1 { // dump single stream
 		if err := dumpStream(codec, options.outputFile, options.rtpStreams[options.streamIndex-1]); err != nil {
-			os.Remove(options.outputFile)
 			return cli.NewExitError(fmt.Sprintf("failed to decode stream: %s", err), 1)
 		}
 		return nil
@@ -123,17 +122,10 @@ func doDump(options dumpOptions) error {
 	baseName := options.outputFile[:len(options.outputFile)-len(extension)] + "_s"
 	fmt.Printf("dumping %d streams\n", len(options.rtpStreams))
 	for streamIndex, stream := range options.rtpStreams {
-		codec := options.codecMetadata.Init()
-		if err := codec.SetOptions(options.options); err != nil {
-			return err
-		}
-		codec.Init()
-
 		fileName := baseName + strconv.Itoa(streamIndex+1) + extension
 
 		if err := dumpStream(codec, fileName, stream); err != nil {
 			log.Error("failed to decode stream " + strconv.Itoa(streamIndex+1) + ": " + err.Error())
-			os.Remove(fileName)
 		}
 	}
 	return nil
@@ -142,8 +134,12 @@ func doDump(options dumpOptions) error {
 
 func dumpStream(codec codecs.Codec, fileName string, stream *rtp.RtpStream) (err error) {
 	defer func() {
+		codec.Reset()
 		if p := recover(); p != nil {
 			err = fmt.Errorf("%s", p)
+		}
+		if err != nil {
+			os.Remove(fileName)
 		}
 	}()
 
