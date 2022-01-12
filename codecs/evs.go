@@ -28,11 +28,16 @@ type Evs struct {
 	timestamp  uint32
 }
 
+func NewEvs() Codec {
+	return &Evs{configured: false, FullHeader: false, timestamp: 0}
+}
+
 func (evs *Evs) Init() {
 }
 
-func NewEvs() Codec {
-	return &Evs{configured: false, FullHeader: false, timestamp: 0}
+func (evs *Evs) Reset() {
+	evs.started = false
+	evs.timestamp = 0
 }
 
 func (evs Evs) GetFormatMagic() []byte {

@@ -2,6 +2,7 @@ package codecs
 
 import (
 	"errors"
+	"math"
 
 	"github.com/david-biro/rtpdump/log"
 	"github.com/david-biro/rtpdump/rtp"
@@ -31,6 +32,12 @@ func NewAmr() Codec {
 }
 
 func (amr *Amr) Init() {
+}
+
+func (amr *Amr) Reset() {
+	amr.started = false
+	amr.timestamp = 0
+	amr.lastSeq = 0
 }
 
 func (amr *Amr) isWideBand() bool {
@@ -106,6 +113,9 @@ func (amr *Amr) handleMissingSamples(timestamp uint32) (result []byte) {
 	if amr.timestamp != 0 {
 		lostSamplesFromPrevious := ((timestamp - amr.timestamp) / (uint32(amr.sampleRate) / 50)) - 1
 		log.Sdebug("lostSamplesFromPrevious: %d, time: %d", lostSamplesFromPrevious, lostSamplesFromPrevious*20)
+		if lostSamplesFromPrevious == math.MaxUint32 { // something caused a wrap around
+			return result
+		}
 		for i := lostSamplesFromPrevious; i > 0; i-- {
 			if amr.isWideBand() {
 				result = append(result, 0xFC)
@@ -127,7 +137,6 @@ func (amr *Amr) getSpeechFrameByteSize(frameType int) (size int) {
 }
 
 func (amr *Amr) handleOaMode(timestamp uint32, payload []byte) ([]byte, error) {
-
 	var result []byte
 	var currentTimestamp uint32
 

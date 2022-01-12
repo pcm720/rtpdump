@@ -25,6 +25,11 @@ func NewH264() Codec {
 func (c *H264) Init() {
 }
 
+func (c *H264) Reset() {
+	c.started = false
+	c.timestamp = 0
+}
+
 func (c *H264) SetOptions(options map[string]string) error {
 
 	v, ok := options["packetization-mode"]
