@@ -2,6 +2,7 @@ package codecs
 
 import (
 	"errors"
+	"fmt"
 	"math"
 
 	"github.com/david-biro/rtpdump/log"
@@ -18,11 +19,13 @@ const AMR_NB_SAMPLE_RATE = 8000
 const AMR_WB_SAMPLE_RATE = 16000
 
 type Amr struct {
-	started      bool
-	configured   bool
-	sampleRate   int
-	octetAligned bool
-	timestamp    uint32
+	started       bool
+	configured    bool
+	sampleRate    int
+	octetAligned  bool
+	alignmentSet  bool
+	sampleRateSet bool
+	timestamp     uint32
 
 	lastSeq uint16
 }
@@ -36,6 +39,9 @@ func (amr *Amr) Init() {
 
 func (amr *Amr) Reset() {
 	amr.started = false
+	amr.alignmentSet = false
+	amr.sampleRateSet = false
+	amr.sampleRate = 0
 	amr.timestamp = 0
 	amr.lastSeq = 0
 }
@@ -44,11 +50,14 @@ func (amr *Amr) isWideBand() bool {
 	return amr.sampleRate == AMR_WB_SAMPLE_RATE
 }
 
-func (amr Amr) GetFormatMagic() []byte {
-	if amr.isWideBand() {
-		return []byte(AMR_WB_MAGIC)
-	} else {
-		return []byte(AMR_NB_MAGIC)
+func (amr Amr) GetFormatMagic() ([]byte, error) {
+	switch amr.sampleRate {
+	case AMR_WB_SAMPLE_RATE:
+		return []byte(AMR_WB_MAGIC), nil
+	case AMR_NB_SAMPLE_RATE:
+		return []byte(AMR_NB_MAGIC), nil
+	default:
+		return nil, amr.invalidState()
 	}
 }
 
@@ -61,25 +70,21 @@ func (amr *Amr) SetOptions(options map[string]string) error {
 		return amr.invalidState()
 	}
 
-	v, ok := options["octet-aligned"]
-	if !ok {
-		return errors.New("required codec option not present")
+	switch options["octet-aligned"] {
+	case "0":
+		amr.octetAligned, amr.alignmentSet = false, true
+	case "1":
+		amr.octetAligned, amr.alignmentSet = true, true
+	default:
 	}
 
-	amr.octetAligned = v == "1"
-
-	v, ok = options["sample-rate"]
-	if !ok {
-		return errors.New("required codec option not present")
+	switch options["sample-rate"] {
+	case "nb":
+		amr.sampleRate, amr.sampleRateSet = AMR_NB_SAMPLE_RATE, true
+	case "wb":
+		amr.sampleRate, amr.sampleRateSet = AMR_WB_SAMPLE_RATE, true
 	}
 
-	if v == "nb" {
-		amr.sampleRate = AMR_NB_SAMPLE_RATE
-	} else if v == "wb" {
-		amr.sampleRate = AMR_WB_SAMPLE_RATE
-	} else {
-		return errors.New("invalid codec option value")
-	}
 	amr.configured = true
 	return nil
 }
@@ -90,7 +95,13 @@ func (amr *Amr) HandleRtpPacket(packet *rtp.RtpPacket) (result []byte, err error
 	}
 
 	if packet.SequenceNumber <= amr.lastSeq {
-		return nil, errors.New("Ignore out of sequence")
+		return nil, errors.New("ignore out of sequence")
+	}
+
+	if !amr.alignmentSet || !amr.sampleRateSet {
+		if err := amr.detectParameters(packet); err != nil {
+			return nil, err
+		}
 	}
 
 	result = append(result, amr.handleMissingSamples(packet.Timestamp)...)
@@ -105,8 +116,58 @@ func (amr *Amr) HandleRtpPacket(packet *rtp.RtpPacket) (result []byte, err error
 	if err != nil {
 		return nil, err
 	}
+
 	result = append(result, speechFrame...)
 	return result, nil
+}
+
+func (amr *Amr) detectParameters(packet *rtp.RtpPacket) error {
+	if len(packet.Payload) == 2 { // can't detect codec parameters using packet that contains only the AMR header, probably a "no data" packet
+		return errors.New("payload is too short")
+	}
+
+	oaFrameType := (packet.Payload[1] & 0x78) >> 3
+	beFrameType := (packet.Payload[0]&0x07)<<1 | (packet.Payload[1]&0x80)>>7
+	log.Sdebug(fmt.Sprintf("expected OA type %d NB frame size: %d, WB: %d, actual: %d", oaFrameType, AMR_NB_FRAME_SIZE[oaFrameType], AMR_WB_FRAME_SIZE[oaFrameType], len(packet.Payload)))
+	log.Sdebug(fmt.Sprintf("expected BE type %d NB frame size: %d, WB: %d, actual: %d", beFrameType, AMR_NB_FRAME_SIZE[beFrameType], AMR_WB_FRAME_SIZE[beFrameType], len(packet.Payload)))
+
+	checkFrameSize := func(frameSize int) bool {
+		if frameSize > 0 {
+			if d := (len(packet.Payload) - frameSize); d >= 0 && d < 3 {
+				return true
+			}
+		}
+		return false
+	}
+	setAMRParameters := func(octetAligned bool, sampleRate int) {
+		amr.alignmentSet, amr.sampleRateSet = true, true
+		amr.octetAligned, amr.sampleRate = octetAligned, sampleRate
+	}
+
+	if (packet.Payload[0] << 4) == 0x0 { // check for octet-aligned only if the first byte has reserved bits after 4-bit CMR
+		if checkFrameSize(AMR_NB_FRAME_SIZE[oaFrameType]) {
+			log.Info("detected AMR-NB octet-aligned frame")
+			setAMRParameters(true, AMR_NB_SAMPLE_RATE)
+			return nil
+		}
+		if checkFrameSize(AMR_WB_FRAME_SIZE[oaFrameType]) {
+			log.Info("detected AMR-WB octet-aligned frame")
+			setAMRParameters(true, AMR_WB_SAMPLE_RATE)
+			return nil
+		}
+	}
+
+	if checkFrameSize(AMR_NB_FRAME_SIZE[beFrameType]) {
+		log.Info("detected AMR-NB bandwidth-efficient frame")
+		setAMRParameters(false, AMR_NB_SAMPLE_RATE)
+		return nil
+	}
+	if checkFrameSize(AMR_WB_FRAME_SIZE[beFrameType]) {
+		log.Info("detected AMR-WB bandwidth-efficient frame")
+		setAMRParameters(false, AMR_WB_SAMPLE_RATE)
+		return nil
+	}
+	return errors.New("unable to detect codec parameters")
 }
 
 func (amr *Amr) handleMissingSamples(timestamp uint32) (result []byte) {
@@ -129,11 +190,9 @@ func (amr *Amr) handleMissingSamples(timestamp uint32) (result []byte) {
 
 func (amr *Amr) getSpeechFrameByteSize(frameType int) (size int) {
 	if amr.isWideBand() {
-		size = AMR_WB_FRAME_SIZE[frameType]
-	} else {
-		size = AMR_NB_FRAME_SIZE[frameType]
+		return AMR_WB_FRAME_SIZE[frameType]
 	}
-	return
+	return AMR_NB_FRAME_SIZE[frameType]
 }
 
 func (amr *Amr) handleOaMode(timestamp uint32, payload []byte) ([]byte, error) {
@@ -146,6 +205,12 @@ func (amr *Amr) handleOaMode(timestamp uint32, payload []byte) ([]byte, error) {
 	// TOC := [F][FT(4bit)][Q][P][P]
 	// storage := [0][FT(4bit)][Q][0][0]
 	cmr := (rtpFrameHeader[0] & 0xF0) >> 4
+
+	if cmr == 0 && len(rtpFrameHeader) == 4 { // RFC 2833 RTP Event has a CMR of zero and a length of 4 bytes
+		printDTMFEvent(rtpFrameHeader)
+		return nil, nil
+	}
+
 	isLastFrame := (rtpFrameHeader[1]&0x80)&0x80 == 0x00
 	frameType := (rtpFrameHeader[1] & 0x78) >> 3
 	quality := (rtpFrameHeader[1]&0x04)&0x04 == 0x04
@@ -184,6 +249,12 @@ func (amr *Amr) handleBeMode(timestamp uint32, payload []byte) ([]byte, error) {
 	// packing frame with TOC: frame type and quality bit
 	// RTP=[CMR(4bit)[F][FT(4bit)][Q][..speechFrame]] -> storage=[0][FT(4bit)][Q][0][0]
 	cmr := (rtpFrameHeader[0] & 0xF0) >> 4
+
+	if cmr == 0 && len(rtpFrameHeader) == 4 { // RFC 2833 RTP Event has a CMR of zero and a length of 4 bytes
+		printDTMFEvent(rtpFrameHeader)
+		return nil, nil
+	}
+
 	isLastFrame := (rtpFrameHeader[0]&0x08)>>3 == 0x00
 	frameType := (rtpFrameHeader[0]&0x07)<<1 | (rtpFrameHeader[1]&0x80)>>7
 	quality := (rtpFrameHeader[1] & 0x40) == 0x40
@@ -221,9 +292,17 @@ func (amr *Amr) handleBeMode(timestamp uint32, payload []byte) ([]byte, error) {
 	return result, nil
 }
 
+func printDTMFEvent(frameHeader []byte) {
+	rtpEvent := frameHeader[0]
+	endOfEvent := (frameHeader[1] & 0x80) != 0
+	volume := (frameHeader[1] & 0x3F)
+	eventDuration := frameHeader[2] + frameHeader[3]
+	log.Info(fmt.Sprintf("possible DTMF event: 0x%0x, end of event: %t, volume: %d, duration: %d", rtpEvent, endOfEvent, volume, eventDuration))
+}
+
 var AmrMetadata = CodecMetadata{
 	Name:     "amr",
-	LongName: "Adaptative Multi Rate",
+	LongName: "Adaptive Multi Rate",
 	Options: []CodecOption{
 		amrSampleRateOption,
 		amrOctetAlignedOption,
@@ -235,8 +314,8 @@ var amrOctetAlignedOption = CodecOption{
 	Required:         true,
 	Name:             "octet-aligned",
 	Description:      "whether this payload is octet-aligned or bandwidth-efficient",
-	ValidValues:      []string{"0", "1"},
-	ValueDescription: []string{"bandwidth-efficient", "octet-aligned"},
+	ValidValues:      []string{"0", "1", "auto"},
+	ValueDescription: []string{"bandwidth-efficient", "octet-aligned", "auto"},
 	RestrictValues:   true,
 }
 
@@ -244,7 +323,7 @@ var amrSampleRateOption = CodecOption{
 	Required:         true,
 	Name:             "sample-rate",
 	Description:      "whether this payload is narrow or wide band",
-	ValidValues:      []string{"nb", "wb"},
-	ValueDescription: []string{"Narrow Band (8000)", "Wide Band (16000)"},
+	ValidValues:      []string{"nb", "wb", "auto"},
+	ValueDescription: []string{"Narrow Band (8000)", "Wide Band (16000)", "Detect automatically"},
 	RestrictValues:   true,
 }
