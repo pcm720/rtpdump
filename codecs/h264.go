@@ -41,8 +41,8 @@ func (c *H264) SetOptions(options map[string]string) error {
 	return nil
 }
 
-func (c H264) GetFormatMagic() []byte {
-	return []byte{}
+func (c H264) GetFormatMagic() ([]byte, error) {
+	return []byte{}, nil
 }
 
 func (c *H264) HandleRtpPacket(packet *rtp.RtpPacket) (result []byte, err error) {

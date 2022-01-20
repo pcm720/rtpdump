@@ -40,8 +40,8 @@ func (evs *Evs) Reset() {
 	evs.timestamp = 0
 }
 
-func (evs Evs) GetFormatMagic() []byte {
-	return append([]byte(EVS_MAGIC_1), []byte(EVS_MAGIC_2)...)
+func (evs Evs) GetFormatMagic() ([]byte, error) {
+	return append([]byte(EVS_MAGIC_1), []byte(EVS_MAGIC_2)...), nil
 }
 
 func (evs *Evs) invalidState() error {

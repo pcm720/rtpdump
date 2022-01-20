@@ -11,7 +11,7 @@ type Codec interface {
 	Reset()
 	SetOptions(options map[string]string) error
 	HandleRtpPacket(packet *rtp.RtpPacket) ([]byte, error)
-	GetFormatMagic() []byte
+	GetFormatMagic() ([]byte, error)
 }
 
 type CodecMetadata struct {
