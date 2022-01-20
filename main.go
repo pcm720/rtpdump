@@ -55,7 +55,7 @@ func main() {
 				},
 				cli.StringFlag{
 					Name:  "flags, f",
-					Value: "sample-rate:nb,octet-aligned:0",
+					Value: "sample-rate:auto,octet-aligned:auto",
 					Usage: "Codec options in \"option:value\" format, separated by comma",
 				},
 				cli.StringFlag{

@@ -109,8 +109,16 @@ func doInteractiveDump(c *cli.Context, rtpReader *rtp.RtpReader) error {
 	codec.Init()
 
 	f, err := os.Create(outputFile)
+	if err != nil {
+		return cli.NewMultiError(cli.NewExitError("failed to create output file", 1), err)
+	}
 	defer f.Close()
-	f.Write(codec.GetFormatMagic())
+
+	magic, err := codec.GetFormatMagic()
+	if err != nil {
+		return cli.NewMultiError(cli.NewExitError("failed to get format magic", 1), err)
+	}
+	f.Write(magic)
 	for _, r := range rtpStreams[streamIndex-1].RtpPackets {
 		frames, err := codec.HandleRtpPacket(r)
 		if err == nil {

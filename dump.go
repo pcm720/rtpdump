@@ -120,8 +120,9 @@ func doDump(options dumpOptions) error {
 
 	extension := filepath.Ext(options.outputFile) // dump all streams
 	baseName := options.outputFile[:len(options.outputFile)-len(extension)] + "_s"
-	fmt.Printf("dumping %d streams\n", len(options.rtpStreams))
+	log.Info(fmt.Sprintf("dumping %d streams", len(options.rtpStreams)))
 	for streamIndex, stream := range options.rtpStreams {
+		log.Info(fmt.Sprintf("dumping %d", streamIndex+1))
 		fileName := baseName + strconv.Itoa(streamIndex+1) + extension
 
 		if err := dumpStream(codec, fileName, stream); err != nil {
@@ -149,11 +150,29 @@ func dumpStream(codec codecs.Codec, fileName string, stream *rtp.RtpStream) (err
 	}
 	defer f.Close()
 
-	f.Write(codec.GetFormatMagic())
+	gotFormatMagic := false
+	if magic, err := codec.GetFormatMagic(); err == nil {
+		gotFormatMagic = true
+		f.Write(magic)
+	}
 	for _, r := range stream.RtpPackets {
-		if frames, err := codec.HandleRtpPacket(r); err == nil {
-			f.Write(frames)
+		frames, err := codec.HandleRtpPacket(r)
+		if err != nil {
+			if (err.Error() == "ignore out of sequence") || (err.Error() == "payload is too short") {
+				continue
+			}
+			return cli.NewMultiError(cli.NewExitError("failed to handle RTP packet", 1), err)
 		}
+
+		if !gotFormatMagic {
+			magic, err := codec.GetFormatMagic()
+			if err != nil {
+				return cli.NewMultiError(cli.NewExitError("failed to get format magic", 1), err)
+			}
+			f.Write(magic)
+			gotFormatMagic = true
+		}
+		f.Write(frames)
 	}
 	f.Sync()
 	return nil
