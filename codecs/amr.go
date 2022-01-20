@@ -1,6 +1,7 @@
 package codecs
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"math"
@@ -206,8 +207,8 @@ func (amr *Amr) handleOaMode(timestamp uint32, payload []byte) ([]byte, error) {
 	// storage := [0][FT(4bit)][Q][0][0]
 	cmr := (rtpFrameHeader[0] & 0xF0) >> 4
 
-	if cmr == 0 && len(rtpFrameHeader) == 4 { // RFC 2833 RTP Event has a CMR of zero and a length of 4 bytes
-		printDTMFEvent(rtpFrameHeader)
+	if len(rtpFrameHeader) == 4 { // RFC 2833 RTP Event has a length of 4 bytes
+		printRTPEvent(rtpFrameHeader)
 		return nil, nil
 	}
 
@@ -250,8 +251,8 @@ func (amr *Amr) handleBeMode(timestamp uint32, payload []byte) ([]byte, error) {
 	// RTP=[CMR(4bit)[F][FT(4bit)][Q][..speechFrame]] -> storage=[0][FT(4bit)][Q][0][0]
 	cmr := (rtpFrameHeader[0] & 0xF0) >> 4
 
-	if cmr == 0 && len(rtpFrameHeader) == 4 { // RFC 2833 RTP Event has a CMR of zero and a length of 4 bytes
-		printDTMFEvent(rtpFrameHeader)
+	if len(rtpFrameHeader) == 4 { // RFC 2833 RTP Event has a length of 4 bytes
+		printRTPEvent(rtpFrameHeader)
 		return nil, nil
 	}
 
@@ -292,12 +293,12 @@ func (amr *Amr) handleBeMode(timestamp uint32, payload []byte) ([]byte, error) {
 	return result, nil
 }
 
-func printDTMFEvent(frameHeader []byte) {
+func printRTPEvent(frameHeader []byte) {
 	rtpEvent := frameHeader[0]
 	endOfEvent := (frameHeader[1] & 0x80) != 0
 	volume := (frameHeader[1] & 0x3F)
-	eventDuration := frameHeader[2] + frameHeader[3]
-	log.Info(fmt.Sprintf("possible DTMF event: 0x%0x, end of event: %t, volume: %d, duration: %d", rtpEvent, endOfEvent, volume, eventDuration))
+	eventDuration := binary.BigEndian.Uint16([]byte{frameHeader[2], frameHeader[3]})
+	log.Info(fmt.Sprintf("possible RTP event: 0x%0x, end of event: %t, volume: %d, duration: %d", rtpEvent, endOfEvent, volume, eventDuration))
 }
 
 var AmrMetadata = CodecMetadata{
