@@ -94,8 +94,9 @@ func (amr *Amr) HandleRtpPacket(packet *rtp.RtpPacket) (result []byte, err error
 	if !amr.configured {
 		return nil, amr.invalidState()
 	}
-
-	if packet.SequenceNumber <= amr.lastSeq {
+	log.Sdebug("decoding packet with sequence number %d", packet.SequenceNumber)
+	// detect sequence number wrap-around and treat it as stream continuation
+	if !(amr.lastSeq == 0xFFFF && packet.SequenceNumber == 0) && (packet.SequenceNumber <= amr.lastSeq) {
 		return nil, errors.New("ignore out of sequence")
 	}
 
