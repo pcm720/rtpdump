@@ -46,8 +46,8 @@ func (r RtpStream) String() string {
 }
 
 func (r *RtpStream) AddPacket(rtp *RtpPacket) {
-
-	if rtp.SequenceNumber <= r.CurSeq {
+	// detect sequence number wrap-around and treat it as stream continuation
+	if !(r.CurSeq == 0xFFFF && rtp.SequenceNumber == 0) && (rtp.SequenceNumber <= r.CurSeq) {
 		return
 	}
 
