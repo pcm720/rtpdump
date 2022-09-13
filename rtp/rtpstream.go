@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/david-biro/rtpdump/log"
 	"github.com/david-biro/rtpdump/util"
 )
 
@@ -46,15 +47,32 @@ func (r RtpStream) String() string {
 }
 
 func (r *RtpStream) AddPacket(rtp *RtpPacket) {
-	// detect sequence number wrap-around and treat it as stream continuation
-	if !(r.CurSeq == 0xFFFF && rtp.SequenceNumber == 0) && (rtp.SequenceNumber <= r.CurSeq) {
-		return
+	var lostPackets int32 = 0
+
+	// skip calculating number of lost packets if this is the first packet of the stream
+	if r.TotalExpectedPackets != 0 {
+		lostPackets = int32(rtp.SequenceNumber) - int32(r.CurSeq) - 1 // account for the difference between last and current packet
+	}
+
+	if lostPackets < 0 { // if number of lost packets is negative,
+		// detect sequence number wrap-around and treat it as stream continuation while accounting for possible packet losses (±100 packets)
+		if !((r.CurSeq > 65435) && (rtp.SequenceNumber < 100)) { // else, ignore out-of-sequence packets
+			return
+		}
+
+		// handle sequence number overflow and lost packets by
+		// adding number of packets lost before wrap-around and number of packets lost after wrap-around
+		lostPackets = int32(0xFFFF-r.CurSeq) + int32(rtp.SequenceNumber)
+		log.Sinfo("sequence number wrap-around detected, lost %d packets", lostPackets)
+	}
+	if lostPackets != 0 {
+		log.Sdebug("%d packets lost between packets %d and %d", lostPackets, r.CurSeq, rtp.SequenceNumber)
 	}
 
 	r.EndTime = rtp.ReceivedAt
 	r.CurSeq = rtp.SequenceNumber
-	r.TotalExpectedPackets = uint(r.CurSeq - r.FirstSeq)
-	r.LostPackets = r.TotalExpectedPackets - uint(len(r.RtpPackets))
+	r.TotalExpectedPackets += 1 + uint(lostPackets) // count current packet and all lost packets
+	r.LostPackets += uint(lostPackets)
 
 	r.RtpPackets = append(r.RtpPackets, rtp)
 }
